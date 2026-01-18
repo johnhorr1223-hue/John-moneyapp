@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>攒钱狂魔-终极版</title>
+    <style>
+        /* 核心 3D 风格配置 */
+        :root {
+            --bg: #E0E5EC;
+            --shadow: #a3b1c6;
+            --white: #ffffff;
+            --accent: #5E5CE6;
+        }
+
+        body { 
+            background: var(--bg); 
+            font-family: sans-serif; 
+            margin: 0; padding: 20px; 
+            text-align: center; color: #44476A; 
+        }
+
+        /* 3D 卡片 */
+        .card { 
+            background: var(--bg); 
+            padding: 20px; border-radius: 25px; 
+            box-shadow: 9px 9px 16px var(--shadow), -9px -9px 16px var(--white);
+            margin-bottom: 30px; 
+        }
+
+        .balance { font-size: 32px; font-weight: bold; color: var(--accent); margin: 10px 0; }
+
+        /* 3D 按钮：初始凸起，按下凹陷 */
+        .btn { 
+            display: block; width: 100%; padding: 16px; margin: 15px 0; 
+            border: none; border-radius: 15px; font-size: 18px; font-weight: bold;
+            background: var(--bg); color: #44476A;
+            box-shadow: 6px 6px 12px var(--shadow), -6px -6px 12px var(--white);
+            cursor: pointer; transition: 0.1s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn:active { 
+            box-shadow: inset 4px 4px 8px var(--shadow), inset -4px -4px 8px var(--white);
+            transform: translateY(2px);
+        }
+
+        /* 弹窗层级 */
+        #modal { 
+            display:none; position:fixed; top:0; left:0; width:100%; height:100%; 
+            background: rgba(224, 229, 236, 0.95); z-index: 9999; 
+            flex-direction: column; justify-content: center; align-items: center; 
+        }
+
+        .modal-content { 
+            background: var(--bg); padding: 25px; border-radius: 25px; width: 85%; 
+            box-shadow: 10px 10px 20px var(--shadow), -10px -10px 20px var(--white);
+        }
+
+        input { 
+            width: 100%; padding: 12px; font-size: 24px; margin: 15px 0; border: none; 
+            border-radius: 10px; background: var(--bg); text-align: center;
+            box-shadow: inset 3px 3px 6px var(--shadow), inset -3px -3px 6px var(--white);
+        }
+
+        .cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 15px; }
+        .cat-tag { padding: 8px; font-size: 12px; border-radius: 8px; background: var(--bg); box-shadow: 2px 2px 4px var(--shadow), -2px -2px 4px var(--white); cursor: pointer; }
+        .cat-tag.active { box-shadow: inset 2px 2px 4px var(--shadow), inset -2px -2px 4px var(--white); color: var(--accent); font-weight: bold; }
+
+        .log-item { 
+            background: var(--bg); padding: 12px; border-radius: 12px; margin-bottom: 10px; 
+            display: flex; justify-content: space-between; align-items: center; font-size: 14px;
+            box-shadow: 3px 3px 6px var(--shadow), -3px -3px 6px var(--white);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div style="font-size: 12px; opacity: 0.6;">总结余 (净资产)</div>
+        <div id="balance" class="balance">¥ 0.00</div>
+        <div style="display:flex; justify-content: space-around; font-size: 13px;">
+            <div style="color: #34C759;">收入: <span id="tin">0</span></div>
+            <div style="color: #FF3B30;">消费: <span id="tout">0</span></div>
+        </div>
+        <div id="resist-sum" style="margin-top:10px; font-size:11px; color:#D4AF37; font-weight:bold;">✨ 抵御诱惑: ¥ 0.00</div>
+    </div>
+
+    <button class="btn" onclick="openBox('in')" style="color:#34C759;">🧧 录入收入</button>
+    <button class="btn" onclick="openBox('out')" style="color:#FF3B30;">🛒 录入消费</button>
+    <button class="btn" onclick="openBox('resist')" style="color:#D4AF37; border: 1px dashed #D4AF37;">🛡️ 欲望减法</button>
+
+    <div id="log-list" style="margin-top: 20px; text-align: left;"></div>
+
+    <div id="modal">
+        <div class="modal-content">
+            <h3 id="m-title" style="margin-top:0;">记一笔</h3>
+            <input type="number" id="amt" placeholder="0.00" inputmode="decimal">
+            <div id="cat-grid" class="cat-grid"></div>
+            <button class="btn" onclick="save()" style="background:var(--accent); color:white;">确认</button>
+            <button class="btn" onclick="closeBox()">取消</button>
+        </div>
+    </div>
+
+    <script>
+        // 初始化数据
+        var db = JSON.parse(localStorage.getItem('v3_final_db')) || {in:0, out:0, resist:0, logs:[]};
+        var curMode = 'out';
+        var curCat = '';
+        var cats = {
+            in: ['工资', '奖金', '兼职', '其他'],
+            out: ['餐饮', '交通', '购物', '娱乐', '住房', '其他'],
+            resist: ['奶茶', '零食', '游戏', '外卖', '服饰', '其他']
+        };
+
+        function update() {
+            document.getElementById('balance').innerText = '¥ ' + (db.in - db.out).toFixed(2);
+            document.getElementById('tin').innerText = db.in.toFixed(2);
+            document.getElementById('tout').innerText = db.out.toFixed(2);
+            document.getElementById('resist-sum').innerText = '✨ 抵御诱惑: ¥ ' + db.resist.toFixed(2);
+            
+            var html = '';
+            for(var i=0; i<db.logs.length && i<10; i++){
+                var l = db.logs[i];
+                var c = l.m==='out'?'#FF3B30':(l.m==='in'?'#34C759':'#D4AF37');
+                html += '<div class="log-item"><span>'+(l.m==='resist'?'🛡️ ':'')+l.c+'</span><span style="font-weight:bold;color:'+c+'">'+(l.m==='out'?'-':'+')+l.a.toFixed(2)+'</span></div>';
+            }
+            document.getElementById('log-list').innerHTML = html;
+            localStorage.setItem('v3_final_db', JSON.stringify(db));
+        }
+
+        function openBox(m) {
+            curMode = m;
+            document.getElementById('m-title').innerText = m==='in'?'🧧 收入':(m==='out'?'🛒 消费':'🛡️ 欲望减法');
+            var g = document.getElementById('cat-grid');
+            g.innerHTML = cats[m].map(function(c){ 
+                return '<div class="cat-tag" onclick="selCat(\''+c+'\',this)">'+c+'</div>';
+            }).join('');
+            selCat(cats[m][0], g.firstChild);
+            document.getElementById('modal').style.display = 'flex';
+        }
+
+        function selCat(c, el) {
+            curCat = c;
+            var tags = document.querySelectorAll('.cat-tag');
+            for(var i=0; i<tags.length; i++) tags[i].classList.remove('active');
+            if(el) el.classList.add('active');
+        }
+
+        function closeBox() { document.getElementById('modal').style.display = 'none'; }
+
+        function save() {
+            var val = parseFloat(document.getElementById('amt').value);
+            if (!isNaN(val) && val > 0) {
+                if(curMode==='in') db.in += val;
+                else if(curMode==='out') db.out += val;
+                else if(curMode==='resist') db.resist += val;
+                db.logs.unshift({m:curMode, a:val, c:curCat});
+                update();
+            }
+            closeBox();
+            document.getElementById('amt').value = '';
+        }
+
+        update();
+    </script>
+</body>
+</html>
